@@ -1,4 +1,5 @@
 import datetime
+import math
 import os
 import pandas as pd
 import numpy as np
@@ -95,7 +96,7 @@ else:
 
 saver = ModelSaver(model, RESULT_DIR, model_name, args.kmer, BATCH_SIZE, EPOCHS)
 try:
-    current_epoch = saver.load_weight() // world_size * world_size
+    current_epoch = saver.load_weight()
     print(f'Model loaded from epoch {current_epoch}')
 except FileNotFoundError:
     current_epoch = 0
@@ -107,10 +108,10 @@ print(f'running on: {device}')
 model = nn.parallel.DistributedDataParallel(model)
 
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE * world_size)  # Scale learning rate
 
 # Training loop
-for epoch in range(current_epoch + rank, EPOCHS, world_size):
+for epoch in range(current_epoch, EPOCHS):
     model.train()
     train_sampler.set_epoch(epoch)  # Set epoch for shuffling the data
     for batch_x, batch_y in train_loader:
@@ -124,13 +125,14 @@ for epoch in range(current_epoch + rank, EPOCHS, world_size):
     # save model weights every epoch
     if rank == 0:  # Only save weights from the master node
         saver.save_weight(epoch)
-    # Evaluation on training data
-    train_rmse, train_ea = evaluate_model(model, train_loader, device)
-    # Evaluation on testing data
-    test_rmse, test_ea = evaluate_model(model, test_loader, device)
-    print(f'Epoch [{epoch + 1}/{EPOCHS}], '
-          f'Train RMSE: {train_rmse:.4f}, Train EA: {train_ea:.4f}, '
-          f'Test RMSE: {test_rmse:.4f}, Test EA: {test_ea:.4f}')
+
+        # Evaluation on training data
+        train_rmse, train_ea = evaluate_model(model, train_loader, device)
+        # Evaluation on testing data
+        test_rmse, test_ea = evaluate_model(model, test_loader, device)
+        print(f'Epoch [{epoch + 1}/{EPOCHS}], '
+              f'Train RMSE: {train_rmse:.4f}, Train EA: {train_ea:.4f}, '
+              f'Test RMSE: {test_rmse:.4f}, Test EA: {test_ea:.4f}')
 
 # Final Evaluation
 if rank == 0:  # Only the master node performs the final evaluation and saves results
