@@ -10,6 +10,7 @@ import argparse
 
 from dataset_manager import DatasetManager
 from models.cnn import CNN
+from models.cnn2 import CNN2
 from models.mlp import MLP
 from nn_data_loader import CustomDataset
 from util import is_essential_agreement
@@ -21,7 +22,7 @@ from utils.model_saver import ModelSaver
 # Argument Parser for command line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--kmer', type=int, default=12, help='k-mer value')
-parser.add_argument('--model', type=str, default='CNN', help='Model to use')
+parser.add_argument('--model', type=str, default='cnn', help='Model to use')
 parser.add_argument('--device', type=str, default='cpu', help='Device to use')
 args = parser.parse_args()
 
@@ -34,7 +35,7 @@ DATA_DIR = f'../volatile/genome-data-ignore/processed_{args.kmer}mer_count/'
 RESULT_DIR = '../volatile/results/'
 BATCH_SIZE = 32
 EPOCHS = 500
-LEARNING_RATE = 0.0005
+LEARNING_RATE = 0.0004
 
 dataset_manager = DatasetManager(LABEL_FILE, DATA_DIR)
 train_files, test_files, train_labels, test_labels = dataset_manager.prepare_train_test_path()
@@ -58,12 +59,14 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, num_workers=12)
 model_name = args.model.lower()
 if model_name == 'cnn':
     model = CNN(input_dim=4 ** args.kmer, batch_size=BATCH_SIZE, device=device)
+if model_name == 'cnn2':
+    model = CNN2(input_dim=4 ** args.kmer, batch_size=BATCH_SIZE, device=device)
 elif model_name == 'MLP':
     model = MLP(input_dim=4 ** args.kmer)
 else:
     raise Exception('Invalid model type. Choose between "CNN" and "MLP".')
 
-saver = ModelSaver(model, RESULT_DIR, model_name, args.kmer, BATCH_SIZE, EPOCHS)
+saver = ModelSaver(model, RESULT_DIR, model_name, args.kmer, args.device, BATCH_SIZE, EPOCHS)
 try:
     current_epoch = saver.load_weight()
 except FileNotFoundError:
