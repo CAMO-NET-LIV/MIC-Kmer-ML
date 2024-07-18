@@ -37,23 +37,25 @@ args = parser.parse_args()
 # Debugging: Print arguments
 print('Arguments:', args)
 
-# Initialize the distributed environment
-dist.init_process_group(
-    backend='gloo',
-    init_method=f'tcp://{args.master_addr}:{args.master_port}',
-    world_size=args.world_size,
-    rank=int(os.environ['SLURM_PROCID']),
-    timeout=datetime.timedelta(seconds=args.timeout)
-)
+# Initialize the distributed environment if world_size > 1
+if args.world_size > 1:
+    torch.distributed.init_process_group(
+        backend='nccl' if args.device == 'cuda' else 'gloo',
+        init_method=f'tcp://{args.master_addr}:{args.master_port}',
+        world_size=args.world_size,
+        rank=int(os.environ['SLURM_PROCID']),
+        timeout=datetime.timedelta(seconds=args.timeout)
+    )
 
-rank = dist.get_rank()  # Get the rank of the current process
-world_size = dist.get_world_size()  # Get the total number of processes
+    rank = dist.get_rank()  # Get the rank of the current process
 
-# Debugging: Confirm initialization
-print('Distributed environment initialized with the following parameters:')
-print(f'MASTER_ADDR: {args.master_addr}')
-print(f'MASTER_PORT: {args.master_port}')
-print(f'WORLD_SIZE: {args.world_size}')
+    # Debugging: Confirm initialization
+    print('Distributed environment initialized with the following parameters:')
+    print(f'MASTER_ADDR: {args.master_addr}')
+    print(f'MASTER_PORT: {args.master_port}')
+    print(f'WORLD_SIZE: {args.world_size}')
+else:
+    rank = 0
 
 # Set device
 device = torch.device(args.device)
@@ -62,7 +64,7 @@ device = torch.device(args.device)
 LABEL_FILE = 'labels-cleaned.csv'
 DATA_DIR = f'../volatile/genome-data-ignore/processed_{args.kmer}mer_count/'
 RESULT_DIR = '../volatile/results/'
-BATCH_SIZE = 32 // world_size
+BATCH_SIZE = 32 // args.world_size
 EPOCHS = 500
 LEARNING_RATE = 0.0004
 
@@ -81,8 +83,13 @@ test_dataset = CustomDataset(
 )
 
 # Create distributed samplers and data loaders
-train_sampler = DistributedSampler(train_dataset)
-test_sampler = DistributedSampler(test_dataset, shuffle=False)
+if args.world_size > 1:
+    train_sampler = DistributedSampler(train_dataset)
+    test_sampler = DistributedSampler(test_dataset, shuffle=False)
+else:
+    train_sampler = None  # Use default sampler
+    test_sampler = None
+
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, num_workers=16, sampler=train_sampler)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, num_workers=16, sampler=test_sampler)
 
@@ -90,7 +97,7 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, num_workers=16, sa
 model_name = args.model.lower()
 if model_name == 'cnn':
     model = CNN(input_dim=4 ** args.kmer, batch_size=BATCH_SIZE, device=device)
-if model_name == 'cnn2':
+elif model_name == 'cnn2':
     model = CNN2(input_dim=4 ** args.kmer, batch_size=BATCH_SIZE, device=device)
 elif model_name == 'mlp':
     model = MLP(input_dim=4 ** args.kmer)
@@ -104,11 +111,13 @@ try:
 except FileNotFoundError:
     current_epoch = 0
     print('No saved model found. Training from scratch.')
+
 model = model.to(device)
 print(f'running on: {device}')
 
 # Wrap the model with DistributedDataParallel
-model = nn.parallel.DistributedDataParallel(model)
+if args.world_size > 1:
+    model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)  # Scale learning rate
@@ -116,7 +125,8 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)  # Scale learning r
 # Training loop
 for epoch in range(current_epoch, EPOCHS):
     model.train()
-    train_sampler.set_epoch(epoch)  # Set epoch for shuffling the data
+    if args.world_size > 1:
+        train_sampler.set_epoch(epoch)  # Set epoch for shuffling the data
     for batch_x, batch_y in train_loader:
         batch_x, batch_y = batch_x.to(device), batch_y.to(device)
         optimizer.zero_grad()

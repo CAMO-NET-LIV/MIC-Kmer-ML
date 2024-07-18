@@ -10,6 +10,7 @@ class ModelSaver:
             folder: str,
             model_name: str,
             kmer: int,
+            device: str,
             batch_size: int,
             epochs: int,
     ):
@@ -17,6 +18,7 @@ class ModelSaver:
         self.folder = folder
         self.model_name = model_name
         self.kmer = kmer
+        self.device = device
         self.batch_size = batch_size
         self.epochs = epochs
 
@@ -34,7 +36,7 @@ class ModelSaver:
         return checkpoint['epoch']
 
     def get_file_name(self):
-        return f'model_{self.kmer}mer_{self.model_name}_{self.batch_size}batch_{self.epochs}epochs_{self.world_size}world_size'
+        return f'model_{self.kmer}mer_{self.device}_{self.model_name}_{self.batch_size}batch_{self.epochs}epochs'
 
     def get_filepath(self):
         return os.path.join(
