@@ -47,12 +47,14 @@ fi
 
 # Run the PyTorch distributed training script
 echo "Running Python script"
-srun python3 main-nn.py --kmer 12 \
+srun python3 main-nn.py --kmer 10 \
 --nodes "$NUM_NODES" \
 --master-addr "$MASTER_ADDR" \
 --master-port "$MASTER_PORT" \
 --world-size "$WORLD_SIZE" \
---model "cnn2"
+--model "cnn" \
+--in-mem 1 \
+--lr 0.0004
 
 if [ $? -ne 0 ]; then
   echo "srun Python script failed"
