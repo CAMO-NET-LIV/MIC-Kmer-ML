@@ -16,7 +16,6 @@ from dataset_manager import DatasetManager
 from models.cnn import CNN
 from models.cnn2 import CNN2
 from models.kwise import KWise
-from models.linear import LinearReg
 from models.mlp import MLP
 from nn_data_loader import CustomDataset
 from util import is_essential_agreement
@@ -130,9 +129,6 @@ elif model_name == 'mlp':
 elif model_name == 'kw':
     model = KWise(input_dim=4 ** args.kmer, device=device)
     input_shape = (4 ** args.kmer,)
-elif model_name == 'linear':
-    model = LinearReg(input_dim=4 ** args.kmer)
-    input_shape = (4 ** args.kmer,)
 else:
     raise Exception('Invalid model type. Choose between "CNN" and "MLP".')
 
@@ -150,7 +146,7 @@ except Exception as e:
 model = model.to(device)
 print(f'running on: {device}')
 if rank == 0:
-    summary(model, input_shape)
+    summary(model, input_shape, device=device.type)
 
 # Wrap the model with DistributedDataParallel
 if args.world_size > 1:
