@@ -1,198 +1,204 @@
-import datetime
-import math
 import os
-import pandas as pd
+import time
+
 import numpy as np
-import torch.nn as nn
+import pandas as pd
 import torch
+import torch.nn as nn
 import torch.optim as optim
-import torch.distributed as dist
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler  #
-from torch.utils.data import TensorDataset
-from sklearn.metrics import mean_squared_error
-import argparse
-from dataset_manager import DatasetManager
-from models.cnn import CNN
-from models.cnn2 import CNN2
-from models.kwise import KWise
-from models.mlp import MLP
-from nn_data_loader import CustomDataset
-from util import is_essential_agreement
 from torchsummary import summary
 
+from dataset_manager import DatasetManager
+from util import is_essential_agreement
+from utils.args import parse_arguments
+from utils.data_distribution import DataDistributionManager
 from utils.eval import evaluate_model, model_inference
+from utils.model_configs import get_model, get_model_with_dim
 from utils.model_saver import ModelSaver
+from utils.norm import lq_norm, gradients_batch_norm
 
-# Argument Parser for command line arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('--kmer', type=int, default=12, help='k-mer value')
-parser.add_argument('--model', type=str, default='cnn', help='Model to use')
-parser.add_argument('--lr', type=float, default=0.0004, help='Learning rate')
-parser.add_argument('--device', type=str, default='cpu', help='Device to use')
-parser.add_argument('--nodes', type=int, default=1, help='Number of nodes')
-parser.add_argument('--master-addr', type=str, default='127.0.0.1', help='Master address')
-parser.add_argument('--master-port', type=str, default='12345', help='Master port')
-parser.add_argument('--world-size', type=int, default=1, help='World size')
-parser.add_argument('--timeout', type=int, default=300, help='Timeout for the distributed setup')
-parser.add_argument('--in-mem', type=int, default=0, help='Load data in memory')
-parser.add_argument('--batch-size', type=int, default=32, help='Batch size')
-args = parser.parse_args()
 
-# Debugging: Print arguments
-print('Arguments:', args)
+def load_model_weights(saver):
+    try:
+        current_epoch = saver.load_weight()
+        print(f'Model loaded from epoch {current_epoch}')
+    except FileNotFoundError:
+        current_epoch = 0
+        print('No saved model found. Training from scratch.')
+    except Exception as e:
+        print(f'Error loading model: {e}')
+        current_epoch = 0
+    return current_epoch
 
-# Initialize the distributed environment if world_size > 1
-if args.world_size > 1:
-    torch.distributed.init_process_group(
-        backend='nccl' if args.device == 'cuda' else 'gloo',
-        init_method=f'tcp://{args.master_addr}:{args.master_port}',
-        world_size=args.world_size,
-        rank=int(os.environ['SLURM_PROCID']),
-        timeout=datetime.timedelta(seconds=args.timeout)
-    )
 
-    rank = dist.get_rank()  # Get the rank of the current process
+def train_and_evaluate_model(model, train_loader, test_loader, criterion, optimizer, saver, device, epochs, rank,
+                             world_size):
+    for epoch in range(current_epoch, epochs):
+        model.train()
+        if world_size > 1:
+            train_loader.sampler.set_epoch(epoch)
+        for batch_x, batch_y in train_loader:
+            batch_x, batch_y = batch_x.to(device), batch_y.to(device, dtype=torch.float32)
+            optimizer.zero_grad()
+            outputs = model(batch_x)
+            loss = criterion(outputs, batch_y.unsqueeze(1))
+            loss.backward()
+            optimizer.step()
 
-    # Debugging: Confirm initialization
-    print('Distributed environment initialized with the following parameters:')
-    print(f'MASTER_ADDR: {args.master_addr}')
-    print(f'MASTER_PORT: {args.master_port}')
-    print(f'WORLD_SIZE: {args.world_size}')
-else:
-    rank = 0
+        if rank == 0:
+            train_rmse, train_ea = evaluate_model(model, train_loader, device, scale=SCALE)
+            test_rmse, test_ea = evaluate_model(model, test_loader, device, scale=SCALE)
+            print(f'Epoch [{epoch + 1}/{epochs}], Train RMSE: {train_rmse:.8f}, Train EA: {train_ea:.8f}, '
+                  f'Test RMSE: {test_rmse:.8f}, Test EA: {test_ea:.8f}')
+            saver.save_weight(epoch)
 
-# Set device
-device = torch.device(args.device)
 
-# Configuration constants
-LABEL_FILE = 'labels-cleaned.csv'
-DATA_DIR = f'../volatile/genome-data-ignore/processed_{args.kmer}mer_count/'
-RESULT_DIR = '../volatile/results/'
-BATCH_SIZE = args.batch_size
-EPOCHS = 1500
-leaning_rate = args.lr * args.world_size
-SCALE = False
+def train_and_evaluate_dnp(model, train_loader, test_loader, input_dim, criterion, optimizer, device, epochs, rank,
+                           world_size, patience=5):
+    max_features = 128
+    selected_features = []
+    all_features = list(range(input_dim))
 
-dataset_manager = DatasetManager(LABEL_FILE, DATA_DIR)
-train_files, test_files, train_labels, test_labels = dataset_manager.prepare_train_test_path()
+    # calc input sum and count
 
-train_dataset = CustomDataset(
-    file_names=train_files,
-    labels=train_labels,
-    data_dir=DATA_DIR,
-    scale_label=SCALE,
-)
-test_dataset = CustomDataset(
-    file_names=test_files,
-    labels=test_labels,
-    data_dir=DATA_DIR,
-    scale_label=SCALE,
-)
+    x_sum = torch.zeros(input_dim).to(device)
+    count = 0
+    for batch_x, _ in train_loader:
+        batch_x = batch_x.to(device)
+        x_sum += torch.sum(batch_x, dim=0)
+        count += len(batch_x)
 
-if args.in_mem:
-    print('Loading data in memory')
-    x_train, y_train = zip(
-        *[(train_dataset[i][0].squeeze().tolist(), train_dataset[i][1]) for i in range(len(train_files))])
-    x_train = np.array(x_train, dtype=np.float32)
-    y_train = np.array(y_train, dtype=np.float32)
+    # calc avg
+    x_avg = x_sum / count
 
-    x_test, y_test = zip(*[(test_dataset[i][0].squeeze().tolist(), test_dataset[i][1]) for i in range(len(test_files))])
-    x_test = np.array(x_test, dtype=np.float32)
-    y_test = np.array(y_test, dtype=np.float32)
+    for _ in range(max_features):
+        model.train()
 
-    train_dataset = TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
-    test_dataset = TensorDataset(torch.from_numpy(x_test), torch.from_numpy(y_test))
+        best_loss = float('inf')
+        epochs_no_improve = 0
+        for epoch in range(epochs):
+            if world_size > 1:
+                train_loader.sampler.set_epoch(epoch)
+            for batch_x, batch_y in train_loader:
+                batch_x, batch_y = batch_x.to(device), batch_y.to(device, dtype=torch.float32)
+                optimizer.zero_grad()
+                outputs = model(batch_x, apply_dropout=False)
+                loss = criterion(outputs.squeeze(), batch_y)
+                loss.backward()
 
-# Create distributed samplers and data loaders
-if args.world_size > 1:
-    train_sampler = DistributedSampler(train_dataset)
-    test_sampler = DistributedSampler(test_dataset, shuffle=False)
-else:
-    train_sampler = None  # Use default sampler
-    test_sampler = None
+                # Manually zero out gradients for non-selected features
+                for name, param in model.named_parameters():
+                    if name == 'net.0.weight':
+                        mask = torch.tensor([i not in selected_features for i in range(param.size(1))],
+                                            device=device)
+                        param.grad[:, mask] = 0
 
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, num_workers=16, sampler=train_sampler)
-test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, num_workers=16, sampler=test_sampler)
+                optimizer.step()
 
-# Initialize the model, loss function, and optimizer
-model_name = args.model.lower()
-if model_name == 'cnn':
-    model = CNN(input_dim=4 ** args.kmer, device=device)
-    input_shape = (1, 4 ** args.kmer)
-elif model_name == 'cnn2':
-    model = CNN2(input_dim=4 ** args.kmer, device=device)
-    input_shape = (1, 4 ** args.kmer)
-elif model_name == 'mlp':
-    model = MLP(input_dim=4 ** args.kmer)
-    input_shape = (4 ** args.kmer,)
-elif model_name == 'kw':
-    model = KWise(input_dim=4 ** args.kmer, device=device)
-    input_shape = (4 ** args.kmer,)
-else:
-    raise Exception('Invalid model type. Choose between "CNN" and "MLP".')
+            if rank == 0:
+                train_rmse, train_ea = evaluate_model(model, train_loader, device, scale=SCALE)
+                test_rmse, test_ea = evaluate_model(model, test_loader, device, scale=SCALE)
+                print(f'Epoch [{epoch + 1}/{epochs}], Train RMSE: {train_rmse:.8f}, Train EA: {train_ea:.8f}, '
+                      f'Test RMSE: {test_rmse:.8f}, Test EA: {test_ea:.8f}')
 
-saver = ModelSaver(model, RESULT_DIR, model_name, args.kmer, args.device, BATCH_SIZE, EPOCHS)
-try:
-    current_epoch = saver.load_weight()
-    print(f'Model loaded from epoch {current_epoch}')
-except FileNotFoundError:
-    current_epoch = 0
-    print('No saved model found. Training from scratch.')
-except Exception as e:
-    print(f'Error loading model: {e}')
-    current_epoch = 0
+                # Early stopping logic
+                if test_rmse < best_loss:
+                    best_loss = test_rmse
+                    epochs_no_improve = 0
+                else:
+                    epochs_no_improve += 1
 
-model = model.to(device)
-print(f'running on: {device}')
-if rank == 0:
-    summary(model, input_shape, device=device.type)
+            if epochs_no_improve >= patience:
+                print(f'Early stopping triggered after {epoch + 1} epochs')
+                break
 
-# Wrap the model with DistributedDataParallel
-if args.world_size > 1:
-    model = nn.parallel.DistributedDataParallel(model)
+        print('Calculating gradients for candidates')
+        # Bp multiple times and calculate total (avg) gradients
+        gradients = torch.zeros(input_dim).to(device)
+        for _ in range(5):
+            for batch_x, batch_y in train_loader:
+                batch_x, batch_y = batch_x.to(device), batch_y.to(device, dtype=torch.float32)
+                optimizer.zero_grad()
+                outputs = model(batch_x, apply_dropout=True)
+                loss = criterion(outputs.squeeze(), batch_y)
+                loss.backward()
 
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=leaning_rate)  # Scale learning rate
+                # Accumulate gradients for non-selected features
+                for name, param in model.named_parameters():
+                    if name == 'net.0.weight':
+                        mask = torch.tensor([i not in selected_features for i in range(param.size(1))],
+                                            device=device)
+                        gradients[mask] += lq_norm(param.grad[:, mask])
 
-# Training loop
-for epoch in range(current_epoch, EPOCHS):
-    model.train()
-    if args.world_size > 1:
-        train_sampler.set_epoch(epoch)  # Set epoch for shuffling the data
-    for batch_x, batch_y in train_loader:
-        batch_x, batch_y = batch_x.to(device), batch_y.to(device, dtype=torch.float32)
-        optimizer.zero_grad()
-        outputs = model(batch_x)
-        loss = criterion(outputs, batch_y.unsqueeze(1))
-        loss.backward()
-        optimizer.step()
+        # Select feature with maximum gradient norm
+        # gradients = gradients / x_avg  # Normalize by sum of feature values
+        candidate_features = [feature for feature in all_features if feature not in selected_features]
+        best_feature = candidate_features[torch.argmax(gradients[candidate_features])]
+        selected_features.append(best_feature)
 
-    # save model weights every epoch
-    if rank == 0:  # Only save weights from the master node
-        # Evaluation on training data
-        train_rmse, train_ea = evaluate_model(model, train_loader, device, scale=SCALE)
-        # Evaluation on testing data
-        test_rmse, test_ea = evaluate_model(model, test_loader, device, scale=SCALE)
-        print(f'Epoch [{epoch + 1}/{EPOCHS}], '
-              f'Train RMSE: {train_rmse:.8f}, Train EA: {train_ea:.8f}, '
-              f'Test RMSE: {test_rmse:.8f}, Test EA: {test_ea:.8f}')
+        print(f'Selected feature {best_feature}')
+        print(f'Selected features: {selected_features}')
 
-        saver.save_weight(epoch)
+        # Xavier initialization for newly selected feature
+        for name, param in model.named_parameters():
+            if name == 'net.0.weight':
+                nn.init.xavier_uniform_(param[:, best_feature:best_feature + 1])
 
-# Final Evaluation
-if rank == 0:  # Only the master node performs the final evaluation and saves results
+    return selected_features
+
+
+# Rest of the code remains the same
+
+def final_evaluation(model, test_loader, device, saver, result_dir):
     final_rmse, final_ea = evaluate_model(model, test_loader, device, scale=SCALE)
     print(f'Final RMSE: {final_rmse:.8f}, Final EA: {final_ea:.8f}')
 
     predictions, actuals = model_inference(model, test_loader, device)
     ea = is_essential_agreement(actuals, predictions)
 
-    dataframe = {
-        'actual': actuals,
-        'predicted': predictions,
-        'ea': ea
-    }
-
+    dataframe = {'actual': actuals, 'predicted': predictions, 'ea': ea}
     df = pd.DataFrame(dataframe)
-    df.to_csv(os.path.join(RESULT_DIR, saver.get_file_name() + '.csv'), index=False)
+    df.to_csv(os.path.join(result_dir, saver.get_file_name() + '.csv'), index=False)
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+
+    SCALE = False
+    LABEL_FILE = 'labels-cleaned.csv'
+    DATA_DIR = f'../volatile/genome-data-ignore/processed_{args.kmer}mer_count/'
+    RESULT_DIR = '../volatile/results/'
+    leaning_rate = args.lr * args.world_size
+
+    print('Arguments:', args)
+    device = torch.device(args.device)
+
+    dataset_manager = DatasetManager(LABEL_FILE, DATA_DIR)
+    ddm = DataDistributionManager(args, dataset_manager, data_dir=DATA_DIR)
+    rank = ddm.rank
+
+    train_loader, test_loader = ddm.get_data_loader()
+
+    model, input_shape = get_model(args, device)
+    saver = ModelSaver(model, RESULT_DIR, args)
+    current_epoch = load_model_weights(saver)
+
+    if rank == 0:
+        summary(model, input_shape, device=device.type)
+
+    if args.world_size > 1:
+        model = nn.parallel.DistributedDataParallel(model)
+
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=leaning_rate)
+
+    if args.model.lower() != 'dnp':
+        train_and_evaluate_model(model, train_loader, test_loader, criterion, optimizer, saver, device, args.epochs,
+                                 rank,
+                                 args.world_size)
+    else:
+        selected_features = train_and_evaluate_dnp(model, train_loader, test_loader, input_shape[0], criterion,
+                                                   optimizer, device,
+                                                   args.epochs, rank, args.world_size)
+    if rank == 0:
+        final_evaluation(model, test_loader, device, saver, RESULT_DIR)

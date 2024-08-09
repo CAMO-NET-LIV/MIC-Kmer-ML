@@ -8,19 +8,16 @@ class ModelSaver:
             self,
             model: nn.Module,
             folder: str,
-            model_name: str,
-            kmer: int,
-            device: str,
-            batch_size: int,
-            epochs: int,
+            args
     ):
         self.model = model
         self.folder = folder
-        self.model_name = model_name
-        self.kmer = kmer
-        self.device = device
-        self.batch_size = batch_size
-        self.epochs = epochs
+        self.args = args
+        self.model_name = args.model.lower()
+        self.kmer = args.kmer
+        self.device = args.device
+        self.batch_size = args.batch_size
+        self.epochs = args.epochs
 
     def save_weight(self, current_epoch: int):
         filepath = self.get_filepath()
