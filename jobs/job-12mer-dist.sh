@@ -9,6 +9,7 @@
 #SBATCH --cpus-per-task=40    # Number of CPU cores per task (adjust based on your requirements)
 #SBATCH --time=1-00:00:00       # Increase time limit
 
+export OMP_NUM_THREADS=$SLURM_NTASKS
 export TORCH_DISTRIBUTED_DEBUG="DETAIL"
 
 # Load required modules and activate virtual environment

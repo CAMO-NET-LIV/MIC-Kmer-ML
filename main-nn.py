@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
     SCALE = False
     LABEL_FILE = 'labels-cleaned.csv'
-    DATA_DIR = f'../volatile/genome-data-ignore/processed_{args.kmer}mer_count/'
+    DATA_DIR = f'../volatile/genome-data-ignore/processed_{args.km}mer_count/'
     RESULT_DIR = '../volatile/results/'
     leaning_rate = args.lr * args.world_size
 

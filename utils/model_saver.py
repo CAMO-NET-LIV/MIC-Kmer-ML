@@ -14,7 +14,7 @@ class ModelSaver:
         self.folder = folder
         self.args = args
         self.model_name = args.model.lower()
-        self.kmer = args.kmer
+        self.kmer = args.km
         self.device = args.device
         self.batch_size = args.batch_size
         self.epochs = args.epochs

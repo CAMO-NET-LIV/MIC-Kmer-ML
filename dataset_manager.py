@@ -23,7 +23,6 @@ class DatasetManager:
         return [self.label_lookup[file] for file in file_names]
 
     def load_data(self):
-
         files = list(self.label_lookup.keys())
 
         labels = np.array(list(self.label_lookup.values()), dtype=np.float32)

@@ -8,20 +8,20 @@ from models.mlp import MLP
 def get_model(args, device):
     model_name = args.model.lower()
     if model_name == 'cnn':
-        model = CNN(input_dim=4 ** args.kmer, device=device)
-        input_shape = (1, 4 ** args.kmer)
+        model = CNN(input_dim=4 ** args.km, device=device)
+        input_shape = (1, 4 ** args.km)
     elif model_name == 'cnn2':
-        model = CNN2(input_dim=4 ** args.kmer, device=device)
-        input_shape = (1, 4 ** args.kmer)
+        model = CNN2(input_dim=4 ** args.km, device=device)
+        input_shape = (1, 4 ** args.km)
     elif model_name == 'mlp':
-        model = MLP(input_dim=4 ** args.kmer)
-        input_shape = (4 ** args.kmer,)
+        model = MLP(input_dim=4 ** args.km)
+        input_shape = (4 ** args.km,)
     elif model_name == 'kw':
-        model = KWise(input_dim=4 ** args.kmer, device=device)
-        input_shape = (4 ** args.kmer,)
+        model = KWise(input_dim=4 ** args.km, device=device)
+        input_shape = (4 ** args.km,)
     elif model_name == 'dnp':
-        model = DNP(input_dim=4 ** args.kmer, output_dim=1)
-        input_shape = (4 ** args.kmer,)
+        model = DNP(input_dim=4 ** args.km, output_dim=1)
+        input_shape = (4 ** args.km,)
     else:
         raise Exception('Invalid model type')
 
