@@ -28,7 +28,7 @@ class Extender:
         # reshape the list of lists to a single list
         new = [item for sublist in new for item in sublist]
 
-        logger.info(f'Adding {len(new)} new subsequences to lookup')
+        logger.info(f'Adding {len(new)} new segments to manager')
 
         lookup.add_subsequences(new)
 

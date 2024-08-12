@@ -5,7 +5,7 @@ from recursive.genome.sequence import Sequence
 from tqdm import tqdm
 from recursive.log import logger
 from multiprocessing import Pool
-from recursive.features import lookup
+from recursive.segment import seg_manager
 
 
 class Loader:

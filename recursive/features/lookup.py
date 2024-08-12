@@ -48,7 +48,7 @@ class Lookup:
             logger.error('Index out of range')
             self.lookup = []
 
-        logger.info(f'Keeping {len(self.lookup)} subsequences as shown below:\n{self.lookup}')
+        logger.info(f'Keeping {len(self.lookup)} segments as shown below:\n{self.lookup}')
 
     def add_subsequence(self, subsequence: str):
         """
@@ -56,7 +56,7 @@ class Lookup:
         :param subsequence: str: The subsequence to add
         """
         self.lookup = list(set(self.lookup + [subsequence]))
-        logger.info(f'Number of subsequences: {len(self.lookup)}')
+        logger.info(f'Number of segments: {len(self.lookup)}')
 
     def add_subsequences(self, sequences: [str], remove_duplicates=True):
         """
@@ -69,4 +69,4 @@ class Lookup:
         if remove_duplicates:
             self.lookup = list(set(self.lookup))
 
-        logger.info(f'Number of subsequences: {len(self.lookup)}')
+        logger.info(f'Number of segments: {len(self.lookup)}')

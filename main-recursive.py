@@ -1,21 +1,27 @@
 from recursive.dataset.file_label import FileLabel
 from recursive.dataset.loader import Loader
-from recursive.features.extender import Extender
+from recursive.segment.extender import Extender
 from recursive.model.xgb import XGBoost
-from recursive.features import lookup as lp
+from recursive.segment import seg_manager
+from recursive.etc.config import config
 
 k = 8
 extension = 2
 target = 70
 
-label_file = 'labels-cleaned.csv'
-data_dir = '../volatile/e_coli_mic/'
+SAVE_FILE = 'recursive-70.txt'
 
-file_label = FileLabel(label_file, data_dir)
-lp.add_all_kmer(k)
-loader = Loader(file_label, num_workers=76)
-train_kmer, test_kmer, train_labels, test_labels = loader.get_kmer_dataset(k)
+file_label = FileLabel(config['label_file'], config['data_dir'])
 extender = Extender()
+loader = Loader(file_label, num_workers=76)
+
+# check if the save file exists
+try:
+    seg_manager.load(SAVE_FILE)
+    train_kmer, test_kmer, train_labels, test_labels = loader.get_extended_dataset()
+except FileNotFoundError:
+    seg_manager.add_all_kmer(k)
+    train_kmer, test_kmer, train_labels, test_labels = loader.get_kmer_dataset(k)
 
 while True:
     if k > target:
@@ -26,9 +32,11 @@ while True:
 
     print(importance_df)
 
-    index = list(map(int, importance_df['Feature'].str.replace('f', '').values))[:1000]
-    lp.select(index)
-    extender.extend_all_seq_in_lookup(extension)
+    index = list(map(int, importance_df['Feature'].str.replace('f', '').values))[:1500]
+    seg_manager.use_subset(index)
+    extender.extend_all_segs(extension)
+    seg_manager.segments_pruning()
+    seg_manager.save(SAVE_FILE)
     train_kmer, test_kmer, train_labels, test_labels = loader.get_extended_dataset()
 
     k += extension

@@ -2,7 +2,7 @@ import numpy as np
 import time
 
 from recursive.genome import km
-from recursive.features import lookup
+from recursive.segment import seg_manager
 
 
 class Sequence:
@@ -66,10 +66,10 @@ class Sequence:
         """
         Given a kmer sequence, return the transition frequency matrix.
         """
-        mer_count = np.zeros(len(lookup))
+        mer_count = np.zeros(len(seg_manager))
 
-        for i in range(len(lookup)):
-            mer_count[i] = self.occurrences(self._sequence, lookup[i])
+        for i in range(len(seg_manager)):
+            mer_count[i] = self.occurrences(self._sequence, seg_manager[i])
 
         return mer_count
 
