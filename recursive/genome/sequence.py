@@ -1,12 +1,15 @@
 import numpy as np
 import time
 
+from recursive.genome import km
+from recursive.features import lookup
+
 
 class Sequence:
     def __init__(
             self,
             filepath: str,
-            keep_read_error=False
+            keep_read_error=False,
     ):
         self.filepath = filepath
         self.keep_read_error = keep_read_error
@@ -43,36 +46,38 @@ class Sequence:
 
         return string
 
-    def get_kmer_count(
-            self,
-            k: int
-    ):
+    def get_kmer_count(self, k: int):
         """
-        Given a kmer sequence, return the transition frequency matrix.
+        Bin count for k-mers. Faster than the lookup table with sequence matching. Used initially before any subsequence
+        is selected.
         """
-        nuc_map = {'a': 0, 't': 1, 'g': 2, 'c': 3, 'n': 4} if self.keep_read_error else {'a': 0, 't': 1, 'g': 2, 'c': 3}
-
         base = 5 if self.keep_read_error else 4
-
-        multiply_by = base ** np.arange(k - 1, -1, -1)
         n = base ** k  # number of possible k-mers
 
-        def kmer_mapping(i):
-            return np.dot([nuc_map[c] for c in self[i:i + k]], multiply_by)
-
-        kmer_seq = list(map(kmer_mapping, range(len(self) - k + 1)))
+        # Directly map the sequence to integer values without a separate function
+        kmer_seq = list(map(lambda i: km.kmer_mapping(self[i:i + k]), range(len(self) - k + 1)))
         kmer_seq = np.array(kmer_seq, dtype=np.int32)
 
         kmer_count = np.bincount(kmer_seq, minlength=n)
 
         return kmer_count
 
+    def get_count_from_lookup(self):
+        """
+        Given a kmer sequence, return the transition frequency matrix.
+        """
+        mer_count = np.zeros(len(lookup))
 
-if __name__ == '__main__':
-    start = time.time()
-    for _ in range(1, 5):
-        seq = Sequence('/home/yinzheng/Documents/pycharm/volatile/e_coli_mic/562.5419.fna', keep_read_error=True)
-        print(len(seq))
-        kc = seq.get_kmer_count(8)
+        for i in range(len(lookup)):
+            mer_count[i] = self.occurrences(self._sequence, lookup[i])
 
-    print(f'Time: {time.time() - start}')
+        return mer_count
+
+    def occurrences(self, string, sub):
+        count = start = 0
+        while True:
+            start = string.find(sub, start) + 1
+            if start > 0:
+                count += 1
+            else:
+                return count
