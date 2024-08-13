@@ -47,7 +47,7 @@ while True:
     index = list(map(int, importance_df['Feature'].str.replace('f', '').values))[:MAX_FEATURES]
     seg_manager.use_subset(index)
     # do the pruning first otherwise only longer segments will be kept
-    seg_manager.segments_pruning(index)
+    seg_manager.segments_pruning(range(len(index)))
     extender.extend_all_segs(EXTENSIONS)
     seg_manager.save(SAVE_FILE)
     train_kmer, test_kmer, train_labels, test_labels = loader.get_extended_dataset()
