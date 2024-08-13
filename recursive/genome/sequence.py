@@ -62,14 +62,12 @@ class Sequence:
 
         return kmer_count
 
-    def get_count_from_lookup(self):
+    def get_count_from_seg_manager(self):
+
         """
         Given a kmer sequence, return the transition frequency matrix.
         """
-        mer_count = np.zeros(len(seg_manager))
-
-        for i in range(len(seg_manager)):
-            mer_count[i] = self._occurrences(self._sequence, seg_manager[i])
+        mer_count = np.array([self._occurrences(self._sequence, seg) for seg in seg_manager])
 
         return mer_count
 
@@ -81,3 +79,12 @@ class Sequence:
                 count += 1
             else:
                 return count
+
+
+if __name__ == '__main__':
+    seq = Sequence('../../../volatile/e_coli_mic/562.5419.fna')
+    seg_manager.segments = ['aaaaaaaa'] * 2000
+    start = time.time()
+    o = seq.get_count_from_seg_manager()
+    print('Time:', time.time() - start)
+    print(o)

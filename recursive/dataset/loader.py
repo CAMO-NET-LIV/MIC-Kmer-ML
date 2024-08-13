@@ -82,7 +82,7 @@ class Loader:
     @staticmethod
     def _get_one_extended_dataset(args):
         seq = args
-        return seq.get_count_from_lookup()
+        return seq.get_count_from_seg_manager()
 
     def get_extended_dataset(self):
         """
