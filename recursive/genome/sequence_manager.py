@@ -1,6 +1,3 @@
-from multiprocessing import Manager
-
-
 class SequenceManager:
     def __init__(self, manager):
         self.train_sequences = manager.list()  # Use a managed list

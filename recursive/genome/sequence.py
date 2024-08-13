@@ -69,11 +69,11 @@ class Sequence:
         mer_count = np.zeros(len(seg_manager))
 
         for i in range(len(seg_manager)):
-            mer_count[i] = self.occurrences(self._sequence, seg_manager[i])
+            mer_count[i] = self._occurrences(self._sequence, seg_manager[i])
 
         return mer_count
 
-    def occurrences(self, string, sub):
+    def _occurrences(self, string, sub):
         count = start = 0
         while True:
             start = string.find(sub, start) + 1
