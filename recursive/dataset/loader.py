@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from recursive.genome.sequence_manager import SequenceManager
 from recursive.log import logger
-from multiprocessing import Pool
+from ray.util.multiprocessing.pool import Pool
 from recursive.genome.sequence import Sequence
 from multiprocessing import Manager
 
