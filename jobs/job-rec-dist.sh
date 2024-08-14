@@ -7,7 +7,7 @@
 #SBATCH -N 4                  # Number of nodes
 #SBATCH --ntasks-per-node=1   # Number of tasks per node
 #SBATCH --cpus-per-task=40 # CPUs per task
-#SBATCH --time=24:00:00
+#SBATCH --time=72:00:00
 
 # Optionally set OMP_NUM_THREADS if using OpenMP
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
