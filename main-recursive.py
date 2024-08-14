@@ -1,3 +1,8 @@
+import os
+
+os.environ["RAY_LOG_TO_STDERR"] = "0"
+os.environ["RAY_LOG_LEVEL"] = "ERROR"
+
 import argparse
 
 from recursive.dataset.file_label import FileLabel
@@ -6,12 +11,13 @@ from recursive.segment.extender import Extender
 from recursive.model.xgb import XGBoost
 from recursive.segment import seg_manager
 from recursive.etc.config import config
+import ray
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--k', type=int, default=8)
 parser.add_argument('--ext', type=int, default=2)
 parser.add_argument('--target', type=int, default=70)
-parser.add_argument('--file', type=str, default='recursive-70.txt')
+parser.add_argument('--save-file', type=str, default='recursive-70.txt')
 parser.add_argument('--workers', type=int, default=38)
 parser.add_argument('--features', type=int, default=1000)
 args = parser.parse_args()
@@ -19,18 +25,22 @@ args = parser.parse_args()
 K = args.k
 EXTENSIONS = args.ext
 TARGET = args.target
-SAVE_FILE = args.file
+SAVE_FILE = args.save_file
 NUM_WORKERS = args.workers
 MAX_FEATURES = args.features
 
 file_label = FileLabel(config['label_file'], config['data_dir'])
 extender = Extender()
-loader = Loader(file_label, num_workers=NUM_WORKERS)
+# Initialize Ray
+ray.init(num_cpus=NUM_WORKERS)
+loader = Loader(file_label)
 
 # check if the save file exists
 try:
     seg_manager.load(SAVE_FILE)
     train_kmer, test_kmer, train_labels, test_labels = loader.get_extended_dataset()
+
+    print(train_kmer)
 except FileNotFoundError:
     seg_manager.add_all_kmer(K)
     train_kmer, test_kmer, train_labels, test_labels = loader.get_kmer_dataset(K)

@@ -1,7 +1,7 @@
 class SequenceManager:
-    def __init__(self, manager):
-        self.train_sequences = manager.list()  # Use a managed list
-        self.test_sequences = manager.list()   # Use a managed list
+    def __init__(self):
+        self.train_sequences = []  # Use a managed list
+        self.test_sequences = []   # Use a managed list
 
     def add_train_sequence(self, sequence):
         self.train_sequences.append(sequence)

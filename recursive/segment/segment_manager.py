@@ -4,7 +4,6 @@ from recursive.genome import km
 from recursive.log import logger
 from recursive.etc.config import config
 
-
 class SegmentManager:
     def __init__(
             self,
@@ -14,6 +13,7 @@ class SegmentManager:
         :param kmer: int: The k-mer value
         """
         self.segments = []
+        self.current_max_length = 0
 
     def __iter__(self):
         return iter(self.segments)
@@ -33,7 +33,7 @@ class SegmentManager:
     def add_all_kmer(self, k: int, keep_read_error=False):
         base = 5 if keep_read_error else 4
         kmers = [km.reverse_kmer_mapping(i, k) for i in range(base ** k)]
-        self.add_subsequences(kmers, remove_duplicates=False)
+        self.add_subsequences(kmers, k, remove_duplicates=False)
 
     def use_subset(self, indices: [int]):
         """
@@ -74,18 +74,26 @@ class SegmentManager:
 
         logger.info(f'Loaded {len(self.segments)} segments from {path}')
 
-    def add_subsequences(self, sequences: [str], remove_duplicates=True):
+        # figure out the max length
+        self.current_max_length = max([len(s) for s in self.segments])
+        logger.info(f'Set current max length: {self.current_max_length}')
+
+    def add_subsequences(self, sequences: [str], current_length: int, remove_duplicates=True):
         """
         Add a list of sequences to the lookup table
         Note: This method uses set to remove duplicates, but it changes order of the sequences
-        :param sequences: list: The list of sequences to add#
+        :param sequences: list: The list of sequences to add
+        :param current_length: int: The current max length of the sequences
         :param remove_duplicates: bool: Remove duplicates from the list
         """
         self.segments = self.segments + sequences
         if remove_duplicates:
             self.segments = list(set(self.segments))
 
+        self.current_max_length = current_length
+
         logger.info(f'Number of segments: {len(self.segments)}')
+        logger.info(f'Current max length: {self.current_max_length}')
 
     def segments_pruning(self, importance_ranking: [int]):
         """
@@ -126,6 +134,7 @@ class SegmentManager:
 
 if __name__ == '__main__':
     seg_manager = SegmentManager()
-    seg_manager.segments = ['aaa', 'aa', 'aa', 'a', 'ab', 'b', 'ba', 'bac', 'c', 'ca', 'cab', 'd', 'da', 'dac', 'e', 'ea', 'eac']
+    seg_manager.segments = ['aaa', 'aa', 'aa', 'a', 'ab', 'b', 'ba', 'bac', 'c', 'ca', 'cab', 'd', 'da', 'dac', 'e',
+                            'ea', 'eac']
     seg_manager.segments_pruning([1, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
     print()
