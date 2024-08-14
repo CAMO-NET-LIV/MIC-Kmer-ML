@@ -33,8 +33,7 @@ class SegmentManager:
     def add_all_kmer(self, k: int, keep_read_error=False):
         base = 5 if keep_read_error else 4
         kmers = [km.reverse_kmer_mapping(i, k) for i in range(base ** k)]
-        self.add_subsequences(kmers, remove_duplicates=False)
-        self.current_max_length = k
+        self.add_subsequences(kmers, k, remove_duplicates=False)
 
     def use_subset(self, indices: [int]):
         """
@@ -83,7 +82,8 @@ class SegmentManager:
         """
         Add a list of sequences to the lookup table
         Note: This method uses set to remove duplicates, but it changes order of the sequences
-        :param sequences: list: The list of sequences to add#
+        :param sequences: list: The list of sequences to add
+        :param current_length: int: The current max length of the sequences
         :param remove_duplicates: bool: Remove duplicates from the list
         """
         self.segments = self.segments + sequences

@@ -33,7 +33,7 @@ file_label = FileLabel(config['label_file'], config['data_dir'])
 extender = Extender()
 # Initialize Ray
 ray.init(num_cpus=NUM_WORKERS)
-loader = Loader(file_label, num_workers=NUM_WORKERS)
+loader = Loader(file_label)
 
 # check if the save file exists
 try:

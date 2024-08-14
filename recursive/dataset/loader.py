@@ -14,10 +14,8 @@ class Loader:
     def __init__(
             self,
             file_label: FileLabel,
-            num_workers=8
     ):
         self.file_label = file_label
-        self.num_workers = num_workers
 
         self.train_files = None
         self.test_files = None
