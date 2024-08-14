@@ -20,6 +20,7 @@ parser.add_argument('--target', type=int, default=70)
 parser.add_argument('--save-file', type=str, default='recursive-70.txt')
 parser.add_argument('--workers', type=int, default=38)
 parser.add_argument('--features', type=int, default=1000)
+parser.add_argument('--dist', type=int, default=0)
 args = parser.parse_args()
 
 K = args.k
@@ -31,8 +32,13 @@ MAX_FEATURES = args.features
 
 file_label = FileLabel(config['label_file'], config['data_dir'])
 extender = Extender()
+
 # Initialize Ray
-ray.init(num_cpus=NUM_WORKERS)
+if args.dist:
+    ray.init(address='auto')
+else:
+    ray.init(num_cpus=NUM_WORKERS)
+
 loader = Loader(file_label)
 
 # check if the save file exists
@@ -59,7 +65,9 @@ while True:
     # do the pruning first otherwise only longer segments will be kept
     seg_manager.segments_pruning(range(len(index)))
     extender.extend_all_segs(EXTENSIONS)
+
     seg_manager.save(SAVE_FILE)
+
     train_kmer, test_kmer, train_labels, test_labels = loader.get_extended_dataset()
 
     K += EXTENSIONS
