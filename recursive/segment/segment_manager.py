@@ -4,17 +4,7 @@ from recursive.genome import km
 from recursive.log import logger
 from recursive.etc.config import config
 
-
-class Singleton(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
-class SegmentManager(metaclass=Singleton):
+class SegmentManager:
     def __init__(
             self,
     ):
@@ -23,6 +13,7 @@ class SegmentManager(metaclass=Singleton):
         :param kmer: int: The k-mer value
         """
         self.segments = []
+        self.current_max_length = 0
 
     def __iter__(self):
         return iter(self.segments)
@@ -43,6 +34,7 @@ class SegmentManager(metaclass=Singleton):
         base = 5 if keep_read_error else 4
         kmers = [km.reverse_kmer_mapping(i, k) for i in range(base ** k)]
         self.add_subsequences(kmers, remove_duplicates=False)
+        self.current_max_length = k
 
     def use_subset(self, indices: [int]):
         """
@@ -83,7 +75,7 @@ class SegmentManager(metaclass=Singleton):
 
         logger.info(f'Loaded {len(self.segments)} segments from {path}')
 
-    def add_subsequences(self, sequences: [str], remove_duplicates=True):
+    def add_subsequences(self, sequences: [str], current_length: int, remove_duplicates=True):
         """
         Add a list of sequences to the lookup table
         Note: This method uses set to remove duplicates, but it changes order of the sequences
@@ -94,7 +86,10 @@ class SegmentManager(metaclass=Singleton):
         if remove_duplicates:
             self.segments = list(set(self.segments))
 
+        self.current_max_length = current_length
+
         logger.info(f'Number of segments: {len(self.segments)}')
+        logger.info(f'Current max length: {self.current_max_length}')
 
     def segments_pruning(self, importance_ranking: [int]):
         """
