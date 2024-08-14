@@ -3,11 +3,11 @@ import numpy as np
 from recursive.dataset.file_label import FileLabel
 from tqdm import tqdm
 
-from recursive.genome.sequence_manager import SequenceManager
+from recursive.genome import seq_manager
 from recursive.log import logger
-from multiprocessing import Pool
 from recursive.genome.sequence import Sequence
-from multiprocessing import Manager
+import ray
+from recursive.segment import seg_manager
 
 
 class Loader:
@@ -18,13 +18,6 @@ class Loader:
     ):
         self.file_label = file_label
         self.num_workers = num_workers
-
-        # Initialize a Manager to manage shared objects
-        manager = Manager()
-
-        # Initialize seq_manager with managed lists
-        global seq_manager
-        seq_manager = SequenceManager(manager)
 
         self.train_files = None
         self.test_files = None
@@ -38,51 +31,47 @@ class Loader:
     def _load_sequence_files(self):
         self.train_files, self.test_files, self.train_labels, self.test_labels = self.file_label.get_train_test_path()
 
+    @staticmethod
+    @ray.remote
+    def _get_one_sequence(file):
+        return Sequence(file)
+
     def _get_train_seq(self):
         logger.info('Loading training sequences...')
-        with Pool(self.num_workers) as pool:
-            train_sequences = list(tqdm(pool.imap(Sequence, self.train_files), total=len(self.train_files)))
-
+        train_sequences = [Loader._get_one_sequence.remote(file) for file in self.train_files]
+        train_sequences = [ray.get(a) for a in tqdm(train_sequences)]
         seq_manager.add_train_sequences(train_sequences)
 
     def _get_test_seq(self):
         logger.info('Loading test sequences...')
-        with Pool(self.num_workers) as pool:
-            test_sequences = list(tqdm(pool.imap(Sequence, self.test_files), total=len(self.test_files)))
-
+        test_sequences = [Loader._get_one_sequence.remote(file) for file in self.test_files]
+        test_sequences = [ray.get(a) for a in tqdm(test_sequences)]
         seq_manager.add_test_sequences(test_sequences)
 
     @staticmethod
+    @ray.remote
     def _get_one_kmer_dataset(args):
         seq, k = args
         return seq.get_kmer_count(k)
 
     def get_kmer_dataset(self, k: int):
+
         logger.info(f'Getting k-mer dataset for k={k}...')
 
-        with Pool(self.num_workers) as p:
-            train_kmer = list(tqdm(p.imap(
-                Loader._get_one_kmer_dataset,
-                ((seq, k) for seq in seq_manager.train_sequences)
-            ), total=len(seq_manager.train_sequences)))
-
-        with Pool(self.num_workers) as p:
-            test_kmer = list(tqdm(p.imap(
-                Loader._get_one_kmer_dataset,
-                ((seq, k) for seq in seq_manager.test_sequences)
-            ), total=len(seq_manager.test_sequences)))
+        train_kmer = [Loader._get_one_kmer_dataset.remote((seq, k)) for seq in seq_manager.train_sequences]
+        test_kmer = [Loader._get_one_kmer_dataset.remote((seq, k)) for seq in seq_manager.test_sequences]
 
         return (
-            np.asarray(train_kmer, dtype=np.float32),
-            np.asarray(test_kmer, dtype=np.float32),
+            np.asarray([ray.get(a) for a in tqdm(train_kmer)], dtype=np.float32),
+            np.asarray([ray.get(b) for b in tqdm(test_kmer)], dtype=np.float32),
             np.asarray(self.train_labels, dtype=np.float32),
             np.asarray(self.test_labels, dtype=np.float32)
         )
 
     @staticmethod
-    def _get_one_extended_dataset(args):
-        seq = args
-        return seq.get_count_from_lookup()
+    @ray.remote
+    def _get_one_extended_dataset(seq, seg_man):
+        return seq.get_count_from_seg_manager(seg_man)
 
     def get_extended_dataset(self):
         """
@@ -90,19 +79,13 @@ class Loader:
         :return: tuple: The training and test datasets
         """
         logger.info(f'Getting extended dataset...')
-        with Pool(self.num_workers) as p:
-            train_ext = list(tqdm(p.imap(
-                Loader._get_one_extended_dataset,
-                seq_manager.train_sequences
-            ), total=len(seq_manager.train_sequences)))
-            test_ext = list(tqdm(p.imap(
-                Loader._get_one_extended_dataset,
-                seq_manager.test_sequences
-            ), total=len(seq_manager.test_sequences)))
+        train_ext = [Loader._get_one_extended_dataset.remote(seq, seg_manager) for seq in seq_manager.train_sequences]
+        test_ext = [Loader._get_one_extended_dataset.remote(seq, seg_manager) for seq in seq_manager.test_sequences]
+
 
         return (
-            np.asarray(train_ext, dtype=np.float32),
-            np.asarray(test_ext, dtype=np.float32),
+            np.asarray([ray.get(a) for a in tqdm(train_ext)], dtype=np.float32),
+            np.asarray([ray.get(b) for b in tqdm(test_ext)], dtype=np.float32),
             np.asarray(self.train_labels, dtype=np.float32),
             np.asarray(self.test_labels, dtype=np.float32)
         )

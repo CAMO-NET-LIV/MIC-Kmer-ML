@@ -2,11 +2,11 @@
 #SBATCH -D ./
 #SBATCH --export=ALL
 #SBATCH -J main-rec
-#SBATCH -p nodes           # Ensure this is the correct partition
+#SBATCH -p lowpriority,nodes           # Ensure this is the correct partition
 #SBATCH -o slurm-rec.out
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
-#SBATCH --time=3-00:00:00
+#SBATCH --time=1-00:00:00
 
 # Optionally set OMP_NUM_THREADS if using OpenMP
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK

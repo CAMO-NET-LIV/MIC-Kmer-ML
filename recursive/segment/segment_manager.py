@@ -5,7 +5,16 @@ from recursive.log import logger
 from recursive.etc.config import config
 
 
-class SegmentManager:
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class SegmentManager(metaclass=Singleton):
     def __init__(
             self,
     ):
@@ -126,6 +135,7 @@ class SegmentManager:
 
 if __name__ == '__main__':
     seg_manager = SegmentManager()
-    seg_manager.segments = ['aaa', 'aa', 'aa', 'a', 'ab', 'b', 'ba', 'bac', 'c', 'ca', 'cab', 'd', 'da', 'dac', 'e', 'ea', 'eac']
+    seg_manager.segments = ['aaa', 'aa', 'aa', 'a', 'ab', 'b', 'ba', 'bac', 'c', 'ca', 'cab', 'd', 'da', 'dac', 'e',
+                            'ea', 'eac']
     seg_manager.segments_pruning([1, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
     print()
