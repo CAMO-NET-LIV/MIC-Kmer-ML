@@ -12,6 +12,7 @@ from recursive.log import logger
 class XGBoost:
     def __init__(
             self,
+            boost_rounds: int = 250,
     ):
         self.params = {
             'objective': 'reg:squarederror',
@@ -20,6 +21,8 @@ class XGBoost:
             'nthread': 76,
             'tree_method': 'approx',  # Using histogram-based method
         }
+
+        self.boost_rounds = boost_rounds
 
     def run(
             self,
@@ -44,11 +47,8 @@ class XGBoost:
         # Watchlist to observe the training and testing performance
         watchlist = [(dtrain, 'train'), (dtest, 'test')]
 
-        # Train the model with the custom metric
-        num_boost_round = 250
-
         logger.info('Training the model...')
-        model = xgb.train(self.params, dtrain, num_boost_round, watchlist, custom_metric=essential_agreement_cus_metric)
+        model = xgb.train(self.params, dtrain, self.boost_rounds, watchlist, custom_metric=essential_agreement_cus_metric)
 
         # Print the final evaluation results
         evals_result = model.eval(dtest)

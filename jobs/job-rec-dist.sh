@@ -48,7 +48,7 @@ for ((i = 1; i <= worker_num; i++)); do
     sleep 5
 done
 
-python3 main-recursive.py --worker $((SLURM_CPUS_PER_TASK - 2)) --save-file "rec-38-1.txt" --dist 1
+python3 main-recursive.py --worker $((SLURM_CPUS_PER_TASK - 2)) --save-file "rec-70-1.txt" --features 1500 --dist 1
 echo "Finished running - goodbye from $HOSTNAME"
 
 # Stop Ray
