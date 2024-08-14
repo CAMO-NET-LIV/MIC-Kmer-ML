@@ -75,6 +75,10 @@ class SegmentManager:
 
         logger.info(f'Loaded {len(self.segments)} segments from {path}')
 
+        # figure out the max length
+        self.current_max_length = max([len(s) for s in self.segments])
+        logger.info(f'Set current max length: {self.current_max_length}')
+
     def add_subsequences(self, sequences: [str], current_length: int, remove_duplicates=True):
         """
         Add a list of sequences to the lookup table
