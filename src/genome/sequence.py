@@ -59,3 +59,8 @@ class Sequence:
         kmer_count = np.bincount(kmer_seq, minlength=n)
 
         return kmer_count
+
+if __name__ == '__main__':
+    seq = Sequence('../../../volatile/cgr/Sample_010-MOLMIC_B11.scaffolds.fna')
+    o = seq.get_kmer_count(8)
+    print()
