@@ -32,7 +32,9 @@ file_label = FileLabel(
 loader = Loader(file_label, n_fold=10)
 
 result = pd.DataFrame(columns=['genome_id', 'true', 'pred'])
+fold = 1
 for train_kmer, test_kmer, train_label, test_label, train_genome_id, test_genome_id in loader.get_kmer_dataset(10):
+    print(f'Fold {fold}')
     train_dataset = TensorDataset(torch.tensor(train_kmer, dtype=torch.float32),
                                   torch.tensor(train_label, dtype=torch.float32))
     test_dataset = TensorDataset(torch.tensor(test_kmer, dtype=torch.float32),
@@ -87,5 +89,7 @@ for train_kmer, test_kmer, train_label, test_label, train_genome_id, test_genome
             'true': [true_label],
             'pred': [pred_label]
         })], ignore_index=True)
+
+    fold += 1
 
 result.to_csv(f'results_{args.antibiotic}.csv', index=False)
