@@ -61,6 +61,12 @@ class Sequence:
         return kmer_count
 
 if __name__ == '__main__':
-    seq = Sequence('../../../volatile/cgr/Sample_010-MOLMIC_B11.scaffolds.fna')
-    o = seq.get_kmer_count(8)
-    print()
+    import os
+    from tqdm import tqdm
+    all_flies = os.listdir(f"../../../volatile/cgr")
+    for file in tqdm(all_flies):
+        # save txt
+        kmer_count = Sequence(
+            filepath=f"../../../volatile/cgr/{file}", keep_read_error=False
+        ).get_kmer_count(10)
+        np.save(f"../../../volatile/cgr-data-proc/processed_10mer_count/{file.replace('.fna', '')}.npy", kmer_count)
