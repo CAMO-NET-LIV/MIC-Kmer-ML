@@ -12,12 +12,14 @@ class CNN2(nn.Module):
         self.features = nn.Sequential(
             nn.Conv1d(1, 32, kernel_size=32, stride=32),
             nn.ReLU(),
+            nn.BatchNorm1d(32),  # Add batch normalization layer
             nn.Conv1d(32, 32, kernel_size=16, stride=16),
             nn.ReLU(),
+            nn.BatchNorm1d(32),  # Add batch normalization layer
             nn.Conv1d(32, 32, kernel_size=16, stride=16),
             nn.ReLU(),
             nn.Conv1d(32, self.last_channel, kernel_size=16, stride=16),
-            nn.ReLU()
+            nn.ReLU(),
         )
 
         arch = [32, 16, 16, 16]
@@ -25,6 +27,7 @@ class CNN2(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(self.calc_input_feature_size(arch), 256),
             nn.ReLU(),
+            nn.Dropout(0.2),  # Add dropout layer
             nn.Linear(256, 64),
             nn.ReLU(),
             nn.Linear(64, 16),

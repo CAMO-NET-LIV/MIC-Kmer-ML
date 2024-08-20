@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -22,8 +24,6 @@ parser.add_argument('--fold', type=int, default=10)
 parser.add_argument('--epochs', type=int, default=100)
 parser.add_argument('--workers', type=int, default=38)
 args = parser.parse_args()
-
-ray.init(num_cpus=args.workers)
 
 file_label = FileLabel(
     '../volatile/cgr_labels/cgr_label.csv',
