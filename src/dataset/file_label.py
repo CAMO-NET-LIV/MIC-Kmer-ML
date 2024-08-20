@@ -16,7 +16,7 @@ class FileLabel:
         self.label_lookup = self._load_label_lookup()
 
     def _load_label_lookup(self):
-        data = pd.read_csv(self.label_file, dtype=str).iloc
+        data = pd.read_csv(self.label_file, dtype=str)
         data['files'] = self.data_dir + data['file_name']
         data.dropna(subset=[self.antibiotic], inplace=True)
         filtered = data[['files', self.antibiotic, 'genome_id']].dropna()

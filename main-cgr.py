@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
+from models.cnn2 import CNN2
 from src.dataset.file_label import FileLabel
 from src.dataset.loader import Loader
 from models.cnn import CNN
@@ -10,6 +11,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import ray
+import math
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--label-file', type=str, required=True)
@@ -46,9 +48,9 @@ for train_kmer, test_kmer, train_label, test_label, train_genome_id, test_genome
     # Initialize model, loss function, and optimizer
     input_dim = train_kmer.shape[1]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = CNN(input_dim, device).to(device)
+    model = CNN2(input_dim, device).to(device)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
 
     # Training loop
     for epoch in range(args.epochs):
@@ -65,7 +67,21 @@ for train_kmer, test_kmer, train_label, test_label, train_genome_id, test_genome
 
             running_loss += loss.item()
 
-        print(f'Epoch [{epoch + 1}/{args.epochs}], Loss: {running_loss / len(train_loader):.4f}')
+        rmse_loss = math.sqrt(running_loss / len(train_loader))  # Root Mean Square Error (RMSE)
+
+        # Evaluation on test data during training
+        model.eval()
+        test_loss = 0.0
+        with torch.no_grad():
+            for batch_x, batch_y in test_loader:
+                batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+                outputs = model(batch_x)
+                test_loss += criterion(outputs.squeeze(), batch_y).item()
+
+        rmse_test_loss = math.sqrt(test_loss / len(test_loader))  # Root Mean Square Error (RMSE)
+
+        # Combine training and test loss into a single line
+        print(f'Epoch [{epoch + 1}/{args.epochs}], Train Loss: {rmse_loss:.4f}, Test Loss: {rmse_test_loss:.4f}')
 
     # Evaluation
     model.eval()
@@ -79,8 +95,9 @@ for train_kmer, test_kmer, train_label, test_label, train_genome_id, test_genome
             test_loss += loss.item()
             test_preds.append(outputs.cpu().squeeze().numpy())
 
+    rmse_test_loss = math.sqrt(test_loss / len(test_loader))  # Root Mean Square Error (RMSE)
     test_preds = np.concatenate(test_preds)
-    print(f'Test Loss: {test_loss / len(test_loader):.4f}')
+    print(f'Test Loss: {rmse_test_loss:.4f}')  # Printing RMSE loss instead of MSE
 
     # Add results to the dataframe
     for genome_id, true_label, pred_label in zip(test_genome_id, test_label, test_preds):

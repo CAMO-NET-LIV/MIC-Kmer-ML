@@ -24,7 +24,7 @@ python3 main-cgr.py \
     --label-file "../volatile/cgr_labels/cgr_label.csv" \
     --data-dir "../volatile/cgr/" \
     --antibiotic "mic_AMC" \
-    --epochs 2 \
+    --epochs 100 \
     --workers 38 \
 
 echo "Finished running - goodbye from $HOSTNAME"

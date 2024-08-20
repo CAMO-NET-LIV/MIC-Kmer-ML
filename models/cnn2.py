@@ -16,18 +16,14 @@ class CNN2(nn.Module):
             nn.ReLU(),
             nn.Conv1d(32, 32, kernel_size=16, stride=16),
             nn.ReLU(),
-            nn.Conv1d(32, 32, kernel_size=16, stride=16),
-            nn.ReLU(),
             nn.Conv1d(32, self.last_channel, kernel_size=16, stride=16),
             nn.ReLU()
         )
 
-        arch = [32, 16, 16, 16, 16]
+        arch = [32, 16, 16, 16]
 
         self.classifier = nn.Sequential(
-            nn.Linear(self.calc_input_feature_size(arch), 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
+            nn.Linear(self.calc_input_feature_size(arch), 256),
             nn.ReLU(),
             nn.Linear(256, 64),
             nn.ReLU(),
