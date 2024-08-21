@@ -31,6 +31,8 @@ echo "Starting running on host $HOSTNAME with antibiotic $antibiotic"
 
 conda activate genome
 
+ray start --head --num-cpus 38 --block &
+
 python3 main-cgr.py \
     --label-file "../volatile/cgr_labels/cgr_label.csv" \
     --data-dir "../volatile/cgr/" \

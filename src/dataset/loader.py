@@ -1,9 +1,11 @@
 import numpy as np
-from multiprocessing import Pool, cpu_count
+
 from src.dataset.file_label import FileLabel
 from tqdm import tqdm
+
 from src.genome import seq_manager
 from src.genome.sequence import Sequence
+import ray
 
 
 class Loader:
@@ -37,22 +39,24 @@ class Loader:
             self.test_labels.append(test_labels)
 
     @staticmethod
+    @ray.remote
     def _get_one_sequence(file):
         return Sequence(file)
 
     def _get_train_seq(self, fold):
         print('Loading training sequences...')
-        with Pool(cpu_count() - 2) as pool:
-            train_sequences = list(tqdm(pool.imap(Loader._get_one_sequence, self.train_files[fold]), total=len(self.train_files[fold])))
+        train_sequences = [Loader._get_one_sequence.remote(file) for file in self.train_files[fold]]
+        train_sequences = [ray.get(a) for a in tqdm(train_sequences)]
         seq_manager.add_train_sequences(train_sequences)
 
     def _get_test_seq(self, fold):
         print('Loading test sequences...')
-        with Pool(cpu_count() - 2) as pool:
-            test_sequences = list(tqdm(pool.imap(Loader._get_one_sequence, self.test_files[fold]), total=len(self.test_files[fold])))
+        test_sequences = [Loader._get_one_sequence.remote(file) for file in self.test_files[fold]]
+        test_sequences = [ray.get(a) for a in tqdm(test_sequences)]
         seq_manager.add_test_sequences(test_sequences)
 
     @staticmethod
+    @ray.remote
     def _get_one_kmer_dataset(args):
         seq, k = args
         return seq.get_kmer_count(k)
@@ -65,23 +69,23 @@ class Loader:
 
             print(f'Getting k-mer dataset for k={k}...')
 
-            with Pool(cpu_count() - 2) as pool:
-                train_kmer = list(tqdm(pool.imap(Loader._get_one_kmer_dataset, [(seq, k) for seq in seq_manager.train_sequences]), total=len(seq_manager.train_sequences)))
-                test_kmer = list(tqdm(pool.imap(Loader._get_one_kmer_dataset, [(seq, k) for seq in seq_manager.test_sequences]), total=len(seq_manager.test_sequences)))
+            train_kmer = [Loader._get_one_kmer_dataset.remote((seq, k)) for seq in seq_manager.train_sequences]
+            test_kmer = [Loader._get_one_kmer_dataset.remote((seq, k)) for seq in seq_manager.test_sequences]
 
             if self.n_fold:
                 yield (
-                    np.asarray(train_kmer, dtype=np.float32),
-                    np.asarray(test_kmer, dtype=np.float32),
+                    np.asarray([ray.get(a) for a in tqdm(train_kmer)], dtype=np.float32),
+                    np.asarray([ray.get(b) for b in tqdm(test_kmer)], dtype=np.float32),
                     np.asarray([label[0] for label in self.train_labels[i]], dtype=np.float32),
                     np.asarray([label[0] for label in self.test_labels[i]], dtype=np.float32),
                     [np.asarray(label[1]) for label in self.train_labels[i]],
                     [np.asarray(label[1]) for label in self.test_labels[i]]
                 )
+
             else:
                 return (
-                    np.asarray(train_kmer, dtype=np.float32),
-                    np.asarray(test_kmer, dtype=np.float32),
+                    np.asarray([ray.get(a) for a in tqdm(train_kmer)], dtype=np.float32),
+                    np.asarray([ray.get(b) for b in tqdm(test_kmer)], dtype=np.float32),
                     np.asarray([label[0] for label in self.train_labels[0]], dtype=np.float32),
                     np.asarray([label[0] for label in self.test_labels[0]], dtype=np.float32),
                     [np.asarray(label[1]) for label in self.train_labels[0]],

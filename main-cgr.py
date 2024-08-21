@@ -31,6 +31,8 @@ file_label = FileLabel(
     antibiotic=args.antibiotic
 )
 
+ray.init(address='auto')
+
 loader = Loader(file_label, n_fold=10)
 
 result = pd.DataFrame(columns=['genome_id', 'true', 'pred'])
